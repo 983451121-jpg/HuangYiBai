@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Users, Eye, Flame, Bot, TrendingUp } from "lucide-react";
 import { useDB } from "../store";
+import HeatMapPanel from "../components/HeatMapPanel";
 
 function Stat({ icon: Icon, label, value, suffix, accent }: any) {
   return (
