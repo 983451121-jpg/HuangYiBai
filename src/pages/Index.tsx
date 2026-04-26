@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { Shield, X, User, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { login } from "@/admin/store";
+import { showToast } from "@/admin/Toast";
 
 const Index = () => {
+  const navigate = useNavigate();
   const [showLogin, setShowLogin] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // 演示交互：实际接入后端时替换
-    console.log("admin login attempt", { username });
+    if (login(username, password)) {
+      showToast("登录成功，正在进入后台…");
+      setTimeout(() => navigate("/admin/home"), 400);
+    } else {
+      showToast("请填写账号和至少 3 位密码");
+    }
   };
 
   return (
