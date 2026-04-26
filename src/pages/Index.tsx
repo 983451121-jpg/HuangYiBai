@@ -1,11 +1,16 @@
+import { useState } from "react";
+import { Shield, X, User, Lock } from "lucide-react";
+
 const Index = () => {
-  const navLinks = [
-    { label: "Home", active: true },
-    { label: "Studio", active: false },
-    { label: "About", active: false },
-    { label: "Journal", active: false },
-    { label: "Reach Us", active: false },
-  ];
+  const [showLogin, setShowLogin] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // 演示交互：实际接入后端时替换
+    console.log("admin login attempt", { username });
+  };
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background">
@@ -20,56 +25,110 @@ const Index = () => {
         <source src="/hero-bg.mp4" type="video/mp4" />
       </video>
 
-      {/* Navigation */}
-      <nav className="relative z-10 flex flex-row justify-between items-center px-8 py-6 max-w-7xl mx-auto">
-        <a
-          href="#"
-          className="text-3xl tracking-tight text-foreground"
-          style={{ fontFamily: "'Instrument Serif', serif" }}
-        >
-          Velorah<sup className="text-xs">®</sup>
-        </a>
+      {/* Soft vignette for legibility */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-background/30 via-transparent to-background/60 pointer-events-none" />
 
-        <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href="#"
-              className={`text-sm transition-colors ${
-                link.active
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-
-        <button className="liquid-glass rounded-full px-6 py-2.5 text-sm text-foreground hover:scale-[1.03]">
-          Begin Journey
-        </button>
-      </nav>
-
-      {/* Hero */}
-      <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-32 pb-40 py-[90px]">
+      {/* Hero — centered logo + admin entry */}
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 text-center">
         <h1
-          className="animate-fade-rise text-5xl sm:text-7xl md:text-8xl leading-[0.95] tracking-[-2.46px] max-w-7xl font-normal text-foreground"
-          style={{ fontFamily: "'Instrument Serif', serif" }}
+          className="animate-fade-rise select-none text-foreground"
+          style={{
+            fontFamily: "'Ma Shan Zheng', 'ZCOOL XiaoWei', cursive",
+            fontSize: "clamp(6rem, 18vw, 16rem)",
+            lineHeight: 1,
+            letterSpacing: "0.15em",
+            textShadow:
+              "0 4px 24px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.15)",
+          }}
         >
-          Where <em className="not-italic text-muted-foreground">dreams</em> rise{" "}
-          <em className="not-italic text-muted-foreground">through the silence.</em>
+          寻觅
         </h1>
 
-        <p className="animate-fade-rise-delay text-muted-foreground text-base sm:text-lg max-w-2xl mt-8 leading-relaxed">
-          We're designing tools for deep thinkers, bold creators, and quiet rebels.
-          Amid the chaos, we build digital spaces for sharp focus and inspired work.
+        <p
+          className="animate-fade-rise-delay mt-6 text-muted-foreground tracking-[0.5em] text-sm sm:text-base pl-2"
+          style={{ fontFamily: "'ZCOOL XiaoWei', serif" }}
+        >
+          XUN · MI
         </p>
 
-        <button className="animate-fade-rise-delay-2 liquid-glass rounded-full px-14 py-5 text-base text-foreground mt-12 hover:scale-[1.03] cursor-pointer">
-          Begin Journey
+        <button
+          onClick={() => setShowLogin(true)}
+          className="animate-fade-rise-delay-2 liquid-glass mt-16 inline-flex items-center gap-2 rounded-full px-10 py-4 text-sm text-foreground hover:scale-[1.03] cursor-pointer"
+        >
+          <Shield className="w-4 h-4" />
+          管理员登录
         </button>
-      </section>
+      </main>
+
+      {/* Glass login modal */}
+      {showLogin && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-rise"
+          style={{ animationDuration: "0.4s" }}
+        >
+          <div
+            className="absolute inset-0 bg-background/40 backdrop-blur-sm"
+            onClick={() => setShowLogin(false)}
+          />
+
+          <div className="liquid-glass relative w-full max-w-md rounded-3xl p-10">
+            <button
+              onClick={() => setShowLogin(false)}
+              className="absolute right-5 top-5 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="关闭"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-8">
+              <h2
+                className="text-foreground text-3xl"
+                style={{ fontFamily: "'Ma Shan Zheng', cursive", letterSpacing: "0.1em" }}
+              >
+                管理员登录
+              </h2>
+              <p className="text-muted-foreground text-xs mt-2 tracking-widest">
+                ADMIN PORTAL
+              </p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="账号"
+                  className="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="密码"
+                  className="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="liquid-glass w-full rounded-full py-3 text-sm text-foreground hover:scale-[1.02] transition-transform"
+              >
+                进入后台
+              </button>
+            </form>
+
+            <p className="text-center text-muted-foreground/70 text-xs mt-6">
+              仅授权管理员可登录 · 寻觅景区 AI 导览平台
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
