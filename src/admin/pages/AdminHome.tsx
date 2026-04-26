@@ -26,46 +26,6 @@ function Stat({ icon: Icon, label, value, suffix, accent }: any) {
   );
 }
 
-// CSS 模拟热力图
-function Heatmap() {
-  const cells = Array.from({ length: 8 * 14 });
-  return (
-    <div className="liquid-glass rounded-3xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-foreground text-lg" style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.15em" }}>
-            热点区域分布
-          </div>
-          <div className="text-muted-foreground text-xs mt-1">实时人流密度 · 呼吸动效</div>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>低</span>
-          <div className="w-24 h-2 rounded-full bg-gradient-to-r from-emerald-400/40 via-amber-400/60 to-rose-500/80" />
-          <span>高</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-14 gap-1.5" style={{ gridTemplateColumns: "repeat(14, minmax(0,1fr))" }}>
-        {cells.map((_, i) => {
-          const intensity = Math.random();
-          const hue = 150 - intensity * 150; // 150 -> 0
-          const delay = (i % 7) * 0.15;
-          return (
-            <div
-              key={i}
-              className="aspect-square rounded-md"
-              style={{
-                background: `hsl(${hue} 80% 55% / ${0.25 + intensity * 0.6})`,
-                animation: `heat-pulse 2.4s ease-in-out ${delay}s infinite`,
-              }}
-            />
-          );
-        })}
-      </div>
-      <style>{`@keyframes heat-pulse { 0%,100%{transform:scale(1);opacity:.85} 50%{transform:scale(1.06);opacity:1} }`}</style>
-    </div>
-  );
-}
-
 export default function AdminHome() {
   const db = useDB();
   const [online, setOnline] = useState(1284);
@@ -84,7 +44,7 @@ export default function AdminHome() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2"><Heatmap /></div>
+        <div className="xl:col-span-2"><HeatMapPanel /></div>
         <div className="liquid-glass rounded-3xl p-6">
           <div className="text-foreground text-lg mb-4" style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.15em" }}>
             待处理事项
