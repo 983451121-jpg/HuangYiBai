@@ -3,7 +3,7 @@ import { Layers, MapPin } from "lucide-react";
 
 // 高德地图 Key（来自 https://console.amap.com/dev/key/app）
 // 公共浏览器端 Key，可直接放在前端代码中
-const AMAP_KEY = (import.meta.env.VITE_AMAP_KEY as string) || "YOUR_AMAP_KEY";
+const AMAP_KEY = (import.meta.env.VITE_AMAP_KEY as string) || "8a89d20b7f2d4a90ca361d2f56a59186";
 const AMAP_SECURITY_CODE = (import.meta.env.VITE_AMAP_SECURITY_CODE as string) || "";
 
 // 寻觅景区中心点（示例：杭州西湖）
