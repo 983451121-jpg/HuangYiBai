@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Users, Eye, Flame, Bot, TrendingUp } from "lucide-react";
-import { useDB } from "./store";
+import { useDB } from "../store";
 
 function Stat({ icon: Icon, label, value, suffix, accent }: any) {
   return (
