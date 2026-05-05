@@ -93,10 +93,13 @@ export default function HeatMapPanel() {
   const heatRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polygonRef = useRef<any>(null);
+  const satelliteRef = useRef<any>(null);
+  const roadNetRef = useRef<any>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [mapType, setMapType] = useState<"standard" | "satellite">("standard");
 
   const [spots, setSpots] = useState<LiveSpot[]>([]);
   const [loading, setLoading] = useState(true);
