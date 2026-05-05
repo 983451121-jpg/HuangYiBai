@@ -318,15 +318,31 @@ export default function HeatMapPanel() {
     return () => {
       disposed = true;
       try {
-        markersRef.current.forEach((m) => m.setMap(null));
+        const m = mapRef.current;
+        if (m && (m as any).__dashTimer) clearInterval((m as any).__dashTimer);
+        markersRef.current.forEach((mk) => mk.setMap(null));
         polygonRef.current?.setMap?.(null);
-        mapRef.current?.destroy?.();
+        routeGlowRef.current?.setMap?.(null);
+        routeMainRef.current?.setMap?.(null);
+        routeDashRef.current?.setMap?.(null);
+        routeStartRef.current?.setMap?.(null);
+        routeEndRef.current?.setMap?.(null);
+        m?.destroy?.();
       } catch { /* noop */ }
       markersRef.current = [];
       mapRef.current = null;
       heatRef.current = null;
     };
   }, []);
+
+  // 路线图层显隐
+  useEffect(() => {
+    const layers = [routeGlowRef, routeMainRef, routeDashRef, routeStartRef, routeEndRef];
+    layers.forEach((r) => {
+      if (!r.current) return;
+      showRoute ? r.current.show?.() : r.current.hide?.();
+    });
+  }, [showRoute]);
 
   // === 数据变化时刷新热力 + 标记 ===
   useEffect(() => {
