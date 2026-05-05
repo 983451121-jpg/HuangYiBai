@@ -136,22 +136,28 @@ export default function HeatMapPanel() {
         const map = new AMap.Map(containerRef.current, {
           zoom: 15.4,
           center: CENTER,
-          mapStyle: "amap://styles/dark",
+          // 高德官方"清新版"标准底图：植被绿、建筑灰白、路网清晰，与景区导览图一致
+          mapStyle: "amap://styles/fresh",
           viewMode: "2D",
+          // 打开完整图层：背景/道路/建筑/POI 点（POI 才会显示"灵山大佛""梵宫"等名称）
           features: ["bg", "road", "building", "point"],
+          showLabel: true,
+          rotateEnable: false,
+          pitchEnable: false,
         });
         mapRef.current = map;
         map.addControl(new AMap.Scale({ position: "LB" }));
 
+        // 景区围栏：浅底图上用更深的蓝色虚线 + 极淡填充，模拟截区效果
         const polygon = new AMap.Polygon({
           path: SCENIC_BOUNDARY,
-          strokeColor: "#7dd3fc",
-          strokeWeight: 1.5,
-          strokeOpacity: 0.9,
-          fillColor: "#0ea5e9",
-          fillOpacity: 0.06,
+          strokeColor: "#2563eb",
+          strokeWeight: 2,
+          strokeOpacity: 0.85,
+          fillColor: "#3b82f6",
+          fillOpacity: 0.05,
           strokeStyle: "dashed",
-          strokeDasharray: [6, 4],
+          strokeDasharray: [8, 6],
         });
         polygon.setMap(map);
         polygonRef.current = polygon;
