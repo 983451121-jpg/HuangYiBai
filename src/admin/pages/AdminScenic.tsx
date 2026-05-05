@@ -42,9 +42,32 @@ export default function AdminScenic() {
 }
 
 function InfoPane({ db }: any) {
-  const [s, setS] = useState(db.scenic);
+  const [s, setS] = useState({
+    ...db.scenic,
+    mapBounds: db.scenic.mapBounds ?? { west: 120.0815, south: 31.4365, east: 120.0985, north: 31.4520 },
+  });
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onPickImage = (file: File) => {
+    if (!file) return;
+    if (file.size > 6 * 1024 * 1024) {
+      showToast("图片需小于 6MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setS({ ...s, mapImage: String(e.target?.result || "") });
+      showToast("图片已加载，记得保存");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const updateBound = (k: "west" | "south" | "east" | "north", v: number) => {
+    setS({ ...s, mapBounds: { ...s.mapBounds, [k]: v } });
+  };
+
   return (
-    <div className="liquid-glass rounded-3xl p-6 max-w-2xl space-y-4">
+    <div className="liquid-glass rounded-3xl p-6 max-w-3xl space-y-4">
       <Header title="景区基础信息" />
       <div>
         <Label>景区名称</Label>
@@ -52,12 +75,98 @@ function InfoPane({ db }: any) {
       </div>
       <div>
         <Label>简介</Label>
-        <textarea className={inputCls + " resize-none"} rows={4} value={s.intro} onChange={(e) => setS({ ...s, intro: e.target.value })} />
+        <textarea className={inputCls + " resize-none"} rows={3} value={s.intro} onChange={(e) => setS({ ...s, intro: e.target.value })} />
       </div>
-      <div>
-        <Label>地图素材 URL（高德地图自定义底图）</Label>
-        <input className={inputCls} value={s.mapUrl} onChange={(e) => setS({ ...s, mapUrl: e.target.value })} placeholder="https://..." />
+
+      <div className="border-t border-white/10 pt-4 space-y-3">
+        <div className="text-foreground text-sm" style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.12em" }}>
+          地图素材（可替换高德底图）
+        </div>
+        <div className="text-muted-foreground text-xs leading-relaxed">
+          上传景区手绘图 / 卫星截图后，热力图会渲染在该图片上方。请同时填写图片四角对应的经纬度边界，热点会按地理坐标等比映射，不会错位，并支持滚轮缩放。
+        </div>
+
+        <div>
+          <Label>地图素材 URL（可选 · 也可直接填外链）</Label>
+          <input
+            className={inputCls}
+            value={s.mapUrl}
+            onChange={(e) => setS({ ...s, mapUrl: e.target.value, mapImage: e.target.value ? "" : s.mapImage })}
+            placeholder="https://..."
+          />
+        </div>
+
+        <div>
+          <Label>上传图片素材</Label>
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && onPickImage(e.target.files[0])}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="liquid-glass rounded-xl px-4 py-2 text-xs text-foreground inline-flex items-center gap-2 hover:scale-[1.02] transition-transform"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              选择图片
+            </button>
+            {(s.mapImage || s.mapUrl) && (
+              <button
+                onClick={() => setS({ ...s, mapImage: "", mapUrl: "" })}
+                className="text-xs px-3 py-2 rounded-xl bg-white/5 hover:bg-white/15 text-muted-foreground inline-flex items-center gap-1.5"
+              >
+                <X className="w-3 h-3" /> 清除
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground">支持 JPG / PNG，建议 ≤ 6MB</span>
+          </div>
+          {(s.mapImage || s.mapUrl) && (
+            <div className="mt-3 rounded-2xl border border-white/10 overflow-hidden bg-white/5 p-2">
+              <div className="text-[10px] text-muted-foreground mb-1.5 tracking-widest flex items-center gap-1">
+                <ImageIcon className="w-3 h-3" /> 预览
+              </div>
+              <img
+                src={s.mapImage || s.mapUrl}
+                alt="map"
+                className="w-full max-h-72 object-contain rounded-xl"
+              />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <Label>图片对应的经纬度边界（用于热点等比映射）</Label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">西 (经度 min)</div>
+              <input className={inputCls} type="number" step="0.0001" value={s.mapBounds.west}
+                onChange={(e) => updateBound("west", +e.target.value)} />
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">东 (经度 max)</div>
+              <input className={inputCls} type="number" step="0.0001" value={s.mapBounds.east}
+                onChange={(e) => updateBound("east", +e.target.value)} />
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">南 (纬度 min)</div>
+              <input className={inputCls} type="number" step="0.0001" value={s.mapBounds.south}
+                onChange={(e) => updateBound("south", +e.target.value)} />
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">北 (纬度 max)</div>
+              <input className={inputCls} type="number" step="0.0001" value={s.mapBounds.north}
+                onChange={(e) => updateBound("north", +e.target.value)} />
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-2">
+            默认值已对齐灵山胜境景区。若你上传的是其他范围的图片，请在高德拾取坐标后填入图片左下角与右上角的经纬度。
+          </div>
+        </div>
       </div>
+
       <button
         onClick={() => { api.saveScenic(s); showToast("已保存"); }}
         className="liquid-glass rounded-xl px-6 py-2.5 text-sm text-foreground hover:scale-[1.02] transition-transform inline-flex items-center gap-2"
