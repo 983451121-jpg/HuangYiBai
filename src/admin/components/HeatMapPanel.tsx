@@ -151,6 +151,14 @@ export default function HeatMapPanel() {
         mapRef.current = map;
         map.addControl(new AMap.Scale({ position: "LB" }));
 
+        // 默认叠加卫星 + 路网图层（灵山胜境真实卫星影像 + 路名）
+        AMap.plugin(["AMap.TileLayer.Satellite", "AMap.TileLayer.RoadNet"], () => {
+          if (disposed) return;
+          satelliteRef.current = new AMap.TileLayer.Satellite();
+          roadNetRef.current = new AMap.TileLayer.RoadNet();
+          map.add([satelliteRef.current, roadNetRef.current]);
+        });
+
         // 景区围栏：浅底图上用更深的蓝色虚线 + 极淡填充，模拟截区效果
         const polygon = new AMap.Polygon({
           path: SCENIC_BOUNDARY,
