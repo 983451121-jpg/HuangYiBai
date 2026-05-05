@@ -117,6 +117,10 @@ const CATEGORY_COLOR: Record<Spot["category"], string> = {
 };
 
 export default function HeatMapPanel() {
+  const db = useDB();
+  const customImg = db.scenic?.mapImage || db.scenic?.mapUrl || "";
+  const bounds = db.scenic?.mapBounds || { west: 120.0815, south: 31.4365, east: 120.0985, north: 31.4520 };
+
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const heatRef = useRef<any>(null);
@@ -127,6 +131,10 @@ export default function HeatMapPanel() {
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
   const [spots, setSpots] = useState<Spot[]>(SPOTS);
+  // 模式：自动 → 有图就用 custom，无图用 amap；用户也可强制切换
+  const [forceMode, setForceMode] = useState<"auto" | "amap" | "custom">("auto");
+  const mode: "amap" | "custom" =
+    forceMode === "amap" ? "amap" : forceMode === "custom" ? "custom" : (customImg ? "custom" : "amap");
 
   // 实时人流轻微波动
   useEffect(() => {
@@ -141,13 +149,13 @@ export default function HeatMapPanel() {
     return () => clearInterval(t);
   }, []);
 
-  // 初始化地图
+  // 初始化高德地图（仅在 amap 模式且容器存在时）
   useEffect(() => {
+    if (mode !== "amap") return;
     let disposed = false;
     loadAMap()
       .then((AMap) => {
         if (disposed || !containerRef.current) return;
-
         const map = new AMap.Map(containerRef.current, {
           zoom: 15.4,
           center: CENTER,
@@ -157,10 +165,8 @@ export default function HeatMapPanel() {
           pitch: 0,
         });
         mapRef.current = map;
-
         map.addControl(new AMap.Scale({ position: "LB" }));
 
-        // 景区边界 polygon（玻璃质感描边）
         const polygon = new AMap.Polygon({
           path: SCENIC_BOUNDARY,
           strokeColor: "#7dd3fc",
@@ -173,24 +179,6 @@ export default function HeatMapPanel() {
         });
         polygon.setMap(map);
         polygonRef.current = polygon;
-
-        // 中心标签
-        const label = new AMap.Text({
-          text: "灵山胜境 · 寻觅",
-          position: CENTER,
-          offset: new AMap.Pixel(0, -8),
-          style: {
-            background: "rgba(10,20,30,0.55)",
-            border: "1px solid rgba(255,255,255,0.18)",
-            color: "#fff",
-            padding: "4px 10px",
-            borderRadius: "999px",
-            fontSize: "11px",
-            letterSpacing: "2px",
-            backdropFilter: "blur(8px)",
-          },
-        });
-        label.setMap(map);
 
         AMap.plugin(["AMap.HeatMap"], () => {
           if (disposed) return;
@@ -205,10 +193,7 @@ export default function HeatMapPanel() {
               1.0: "rgba(255,60,90,1)",
             },
           });
-          heatmap.setDataSet({
-            data: expandHeat(SPOTS),
-            max: 700,
-          });
+          heatmap.setDataSet({ data: expandHeat(SPOTS), max: 700 });
           heatRef.current = heatmap;
         });
       })
@@ -225,23 +210,19 @@ export default function HeatMapPanel() {
       mapRef.current = null;
       heatRef.current = null;
     };
-  }, []);
+  }, [mode]);
 
-  // 标记点 + 实时刷新热力数据
+  // 高德 marker + 热力刷新
   useEffect(() => {
+    if (mode !== "amap") return;
     const AMap = window.AMap;
     const map = mapRef.current;
     if (!AMap || !map) return;
 
-    // 刷新热力
-    if (heatRef.current) {
-      heatRef.current.setDataSet({ data: expandHeat(spots), max: 700 });
-    }
+    if (heatRef.current) heatRef.current.setDataSet({ data: expandHeat(spots), max: 700 });
 
-    // 重建标记
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-
     if (!showMarkers) return;
 
     spots.forEach((s) => {
@@ -255,8 +236,6 @@ export default function HeatMapPanel() {
             background:radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%);
             box-shadow:0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4);
             border:1px solid rgba(255,255,255,0.5);
-            display:flex;align-items:center;justify-content:center;
-            backdrop-filter:blur(2px);
           "></div>
           <div style="
             position:absolute;top:100%;left:50%;transform:translate(-50%,4px);
@@ -274,20 +253,25 @@ export default function HeatMapPanel() {
       marker.setMap(map);
       markersRef.current.push(marker);
     });
-  }, [spots, showMarkers]);
+  }, [spots, showMarkers, mode]);
 
   const toggleHeat = () => {
-    if (!heatRef.current) return;
-    if (showHeat) heatRef.current.hide();
-    else heatRef.current.show();
+    if (mode === "amap") {
+      if (!heatRef.current) return;
+      if (showHeat) heatRef.current.hide();
+      else heatRef.current.show();
+    }
     setShowHeat(!showHeat);
   };
 
   const recenter = () => {
-    mapRef.current?.setZoomAndCenter?.(15.4, CENTER, false, 600);
+    if (mode === "amap") {
+      mapRef.current?.setZoomAndCenter?.(15.4, CENTER, false, 600);
+    } else {
+      window.dispatchEvent(new CustomEvent("xunmi-custom-map-reset"));
+    }
   };
 
-  // 排序后的 Top 5 热点
   const top5 = [...spots].sort((a, b) => b.count - a.count).slice(0, 5);
   const total = spots.reduce((s, x) => s + x.count, 0);
   const peak = top5[0];
@@ -296,42 +280,38 @@ export default function HeatMapPanel() {
     <div className="liquid-glass rounded-3xl p-6">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
-          <div
-            className="text-foreground text-lg"
-            style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.15em" }}
-          >
+          <div className="text-foreground text-lg" style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.15em" }}>
             灵山胜境 · 实时热力图
           </div>
           <div className="text-muted-foreground text-xs mt-1">
-            高德地图 · 景区景点级人流热力 · 玻璃叠加层
+            {mode === "custom" ? "自定义底图 · 经纬度等比映射 · 滚轮缩放" : "高德地图 · 景区景点级人流热力 · 玻璃叠加层"}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={toggleHeat}
-            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
-          >
+          {customImg && (
+            <button
+              onClick={() => setForceMode(mode === "amap" ? "custom" : "amap")}
+              className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
+            >
+              {mode === "amap" ? <ImageIcon className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
+              {mode === "amap" ? "切到自定义图" : "切到高德地图"}
+            </button>
+          )}
+          <button onClick={toggleHeat} className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform">
             <Layers className="w-3.5 h-3.5" />
             {showHeat ? "隐藏热力" : "显示热力"}
           </button>
-          <button
-            onClick={() => setShowMarkers((v) => !v)}
-            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
-          >
+          <button onClick={() => setShowMarkers((v) => !v)} className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform">
             {showMarkers ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             {showMarkers ? "隐藏景点" : "显示景点"}
           </button>
-          <button
-            onClick={recenter}
-            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
-          >
+          <button onClick={recenter} className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform">
             <Crosshair className="w-3.5 h-3.5" />
             回到景区
           </button>
         </div>
       </div>
 
-      {/* 图例 */}
       <div className="flex items-center gap-4 mb-3 text-[11px] text-muted-foreground flex-wrap">
         <div className="flex items-center gap-2">
           <span>低</span>
@@ -347,11 +327,20 @@ export default function HeatMapPanel() {
         ))}
       </div>
 
-      {/* 地图容器 */}
       <div className="relative rounded-2xl overflow-hidden border border-white/10" style={{ height: 440 }}>
-        <div ref={containerRef} className="absolute inset-0" />
+        {mode === "amap" ? (
+          <div ref={containerRef} className="absolute inset-0" />
+        ) : (
+          <CustomMapView
+            image={customImg}
+            bounds={bounds}
+            spots={spots}
+            showHeat={showHeat}
+            showMarkers={showMarkers}
+          />
+        )}
 
-        {error && (
+        {error && mode === "amap" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 bg-black/30">
             <MapPin className="w-8 h-8 text-muted-foreground mb-3" />
             <div className="text-foreground text-sm mb-1">高德地图未就绪</div>
@@ -359,19 +348,12 @@ export default function HeatMapPanel() {
           </div>
         )}
 
-        {/* 顶部柔光 */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(7,40,60,0.35) 0%, rgba(7,40,60,0) 22%, rgba(7,40,60,0) 78%, rgba(7,40,60,0.5) 100%)",
-          }}
-        />
-        {/* 玻璃边框 */}
+        <div className="pointer-events-none absolute inset-0" style={{
+          background: "linear-gradient(180deg, rgba(7,40,60,0.35) 0%, rgba(7,40,60,0) 22%, rgba(7,40,60,0) 78%, rgba(7,40,60,0.5) 100%)",
+        }} />
         <div className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.06)]" />
 
-        {/* 实时统计 浮窗 */}
-        <div className="absolute right-3 top-3 liquid-glass rounded-2xl px-4 py-3 min-w-[180px]">
+        <div className="absolute right-3 top-3 liquid-glass rounded-2xl px-4 py-3 min-w-[180px] pointer-events-none">
           <div className="text-[10px] text-muted-foreground tracking-[0.25em]">REAL-TIME</div>
           <div className="mt-1 text-foreground text-2xl" style={{ fontFamily: "'Instrument Serif', serif" }}>
             {total.toLocaleString()}
@@ -383,25 +365,17 @@ export default function HeatMapPanel() {
           </div>
         </div>
 
-        {/* 角落水印 */}
-        <div className="absolute left-3 bottom-3 liquid-glass rounded-xl px-3 py-1.5 text-[11px] text-foreground/90 tracking-wider">
+        <div className="absolute left-3 bottom-3 liquid-glass rounded-xl px-3 py-1.5 text-[11px] text-foreground/90 tracking-wider pointer-events-none">
           XUNMI · 灵山胜境 LIVE
         </div>
       </div>
 
-      {/* Top 5 热点榜 */}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-5 gap-2">
         {top5.map((s, i) => (
-          <div
-            key={s.id}
-            className="rounded-2xl bg-white/5 border border-white/10 p-3 flex flex-col gap-1 relative overflow-hidden"
-          >
-            <div
-              className="absolute inset-0 opacity-30 pointer-events-none"
-              style={{
-                background: `radial-gradient(circle at 0% 0%, ${CATEGORY_COLOR[s.category]}, transparent 60%)`,
-              }}
-            />
+          <div key={s.id} className="rounded-2xl bg-white/5 border border-white/10 p-3 flex flex-col gap-1 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+              background: `radial-gradient(circle at 0% 0%, ${CATEGORY_COLOR[s.category]}, transparent 60%)`,
+            }} />
             <div className="text-[10px] text-muted-foreground tracking-widest">TOP {i + 1}</div>
             <div className="text-foreground text-sm">{s.name}</div>
             <div className="text-foreground/80 text-xs flex items-center justify-between">
@@ -414,3 +388,249 @@ export default function HeatMapPanel() {
     </div>
   );
 }
+
+// ============== 自定义底图 + Canvas 热力 + 等比映射 ==============
+interface Bounds { west: number; south: number; east: number; north: number; }
+
+function CustomMapView({
+  image, bounds, spots, showHeat, showMarkers,
+}: {
+  image: string;
+  bounds: Bounds;
+  spots: Spot[];
+  showHeat: boolean;
+  showMarkers: boolean;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });    // 图片自然像素尺寸
+  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });    // 容器尺寸
+  const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
+  const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  // 监听容器尺寸
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
+      setBoxSize({ w: r.width, h: r.height });
+    });
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // 重置视图（图片以 contain 方式适配）
+  const resetView = () => setView({ scale: 1, tx: 0, ty: 0 });
+  useEffect(() => {
+    const h = () => resetView();
+    window.addEventListener("xunmi-custom-map-reset", h);
+    return () => window.removeEventListener("xunmi-custom-map-reset", h);
+  }, []);
+
+  // 计算图片在容器中的 contain 后的基础尺寸与偏移
+  const layout = useMemo(() => {
+    if (!imgSize.w || !boxSize.w) return { baseW: 0, baseH: 0, baseX: 0, baseY: 0 };
+    const ratio = Math.min(boxSize.w / imgSize.w, boxSize.h / imgSize.h);
+    const baseW = imgSize.w * ratio;
+    const baseH = imgSize.h * ratio;
+    const baseX = (boxSize.w - baseW) / 2;
+    const baseY = (boxSize.h - baseH) / 2;
+    return { baseW, baseH, baseX, baseY };
+  }, [imgSize, boxSize]);
+
+  // 经纬度 → 图片像素（在 base 尺寸下）
+  const llToBasePx = (lng: number, lat: number) => {
+    const { west, east, south, north } = bounds;
+    const x = ((lng - west) / (east - west)) * layout.baseW;
+    const y = (1 - (lat - south) / (north - south)) * layout.baseH;
+    return { x: layout.baseX + x, y: layout.baseY + y };
+  };
+
+  // 应用 view（缩放 + 平移）后实际像素
+  const project = (lng: number, lat: number) => {
+    const p = llToBasePx(lng, lat);
+    // 以容器中心为缩放中心
+    const cx = boxSize.w / 2, cy = boxSize.h / 2;
+    return {
+      x: cx + (p.x - cx) * view.scale + view.tx,
+      y: cy + (p.y - cy) * view.scale + view.ty,
+    };
+  };
+
+  // 绘制 canvas 热力
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !boxSize.w || !boxSize.h) return;
+    canvas.width = boxSize.w;
+    canvas.height = boxSize.h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!showHeat || !layout.baseW) return;
+
+    const maxCount = Math.max(...spots.map((s) => s.count), 1);
+    // 1) 累积灰度
+    const gray = document.createElement("canvas");
+    gray.width = canvas.width;
+    gray.height = canvas.height;
+    const gctx = gray.getContext("2d")!;
+    spots.forEach((s) => {
+      const { x, y } = project(s.lng, s.lat);
+      const intensity = Math.min(1, s.count / maxCount);
+      const radius = 50 * view.scale * (0.7 + intensity * 0.6);
+      const grd = gctx.createRadialGradient(x, y, 0, x, y, radius);
+      grd.addColorStop(0, `rgba(0,0,0,${0.55 * intensity})`);
+      grd.addColorStop(1, "rgba(0,0,0,0)");
+      gctx.fillStyle = grd;
+      gctx.beginPath();
+      gctx.arc(x, y, radius, 0, Math.PI * 2);
+      gctx.fill();
+    });
+
+    // 2) 灰度 → 渐变上色
+    const data = gctx.getImageData(0, 0, canvas.width, canvas.height);
+    const palette = buildPalette();
+    for (let i = 0; i < data.data.length; i += 4) {
+      const a = data.data[i + 3];
+      if (a === 0) continue;
+      const c = palette[a];
+      data.data[i] = c[0];
+      data.data[i + 1] = c[1];
+      data.data[i + 2] = c[2];
+      data.data[i + 3] = Math.min(220, a + 30);
+    }
+    ctx.putImageData(data, 0, 0);
+  }, [spots, showHeat, view, boxSize, layout, bounds]);
+
+  // 滚轮缩放（以鼠标为中心）
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.0015;
+    const newScale = Math.max(0.5, Math.min(6, view.scale * (1 + delta)));
+    if (newScale === view.scale) return;
+    const rect = wrapRef.current!.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const cx = boxSize.w / 2, cy = boxSize.h / 2;
+    // 保持鼠标点在缩放后位置不变
+    const k = newScale / view.scale;
+    const tx = mx - (mx - view.tx - cx) * k - cx + (k - 1) * 0; // 简化
+    const ty = my - (my - view.ty - cy) * k - cy;
+    setView({ scale: newScale, tx, ty });
+  };
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current) return;
+    setView((v) => ({
+      ...v,
+      tx: dragRef.current!.tx + (e.clientX - dragRef.current!.x),
+      ty: dragRef.current!.ty + (e.clientY - dragRef.current!.y),
+    }));
+  };
+  const onMouseUp = () => { dragRef.current = null; };
+
+  // 图片变换样式（与 project 一致）
+  const imgStyle: React.CSSProperties = {
+    position: "absolute",
+    left: layout.baseX,
+    top: layout.baseY,
+    width: layout.baseW,
+    height: layout.baseH,
+    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+    transformOrigin: `${boxSize.w / 2 - layout.baseX}px ${boxSize.h / 2 - layout.baseY}px`,
+    userSelect: "none",
+    pointerEvents: "none",
+  };
+
+  return (
+    <div
+      ref={wrapRef}
+      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      style={{ background: "radial-gradient(circle at 50% 50%, #0b1a2a, #050810)" }}
+      onWheel={onWheel}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {image && (
+        <img
+          ref={imgRef}
+          src={image}
+          alt="map"
+          draggable={false}
+          style={imgStyle}
+          onLoad={(e) => {
+            const t = e.currentTarget;
+            setImgSize({ w: t.naturalWidth, h: t.naturalHeight });
+          }}
+        />
+      )}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 pointer-events-none"
+      />
+      {showMarkers && layout.baseW > 0 && spots.map((s) => {
+        const p = project(s.lng, s.lat);
+        const color = CATEGORY_COLOR[s.category];
+        const size = Math.min(36, 14 + s.count / 30) * Math.max(0.7, Math.min(1.4, view.scale));
+        return (
+          <div
+            key={s.id}
+            className="absolute pointer-events-none"
+            style={{ left: p.x, top: p.y, transform: "translate(-50%,-50%)" }}
+          >
+            <div style={{
+              width: size, height: size, borderRadius: "50%",
+              background: `radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%)`,
+              boxShadow: `0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4)`,
+              border: "1px solid rgba(255,255,255,0.5)",
+            }} />
+            <div style={{
+              position: "absolute", top: "100%", left: "50%", transform: "translate(-50%,4px)",
+              whiteSpace: "nowrap", fontSize: 10, color: "#fff",
+              background: "rgba(10,15,25,0.6)", padding: "2px 6px", borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.12)", letterSpacing: 1,
+            }}>{s.name} · {s.count}</div>
+          </div>
+        );
+      })}
+
+      <div className="absolute left-3 top-3 liquid-glass rounded-xl px-2.5 py-1 text-[10px] text-foreground/80 tracking-widest pointer-events-none">
+        缩放 {view.scale.toFixed(2)}× · 滚轮缩放 / 拖拽平移
+      </div>
+    </div>
+  );
+}
+
+// 构建 256 级渐变查找表（绿→黄→红）
+function buildPalette(): [number, number, number][] {
+  const stops: [number, [number, number, number]][] = [
+    [0.0, [0, 0, 0]],
+    [0.2, [80, 200, 180]],
+    [0.4, [140, 220, 120]],
+    [0.6, [255, 210, 90]],
+    [0.8, [255, 130, 80]],
+    [1.0, [255, 60, 90]],
+  ];
+  const palette: [number, number, number][] = [];
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let a = stops[0], b = stops[stops.length - 1];
+    for (let k = 0; k < stops.length - 1; k++) {
+      if (t >= stops[k][0] && t <= stops[k + 1][0]) { a = stops[k]; b = stops[k + 1]; break; }
+    }
+    const ratio = (t - a[0]) / Math.max(0.0001, b[0] - a[0]);
+    palette.push([
+      Math.round(a[1][0] + (b[1][0] - a[1][0]) * ratio),
+      Math.round(a[1][1] + (b[1][1] - a[1][1]) * ratio),
+      Math.round(a[1][2] + (b[1][2] - a[1][2]) * ratio),
+    ]);
+  }
+  return palette;
+}
+
