@@ -524,12 +524,11 @@ function CustomMapView({
     dragRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
   };
   const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragRef.current) return;
-    setView((v) => ({
-      ...v,
-      tx: dragRef.current!.tx + (e.clientX - dragRef.current!.x),
-      ty: dragRef.current!.ty + (e.clientY - dragRef.current!.y),
-    }));
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    setView((v) => ({ ...v, tx: d.tx + dx, ty: d.ty + dy }));
   };
   const onMouseUp = () => { dragRef.current = null; };
 
