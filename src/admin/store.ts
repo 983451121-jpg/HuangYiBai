@@ -49,7 +49,13 @@ interface DB {
   areas: ScenicArea[];
   goods: Goods[];
   avatars: ScenicAvatar[];
-  scenic: { name: string; intro: string; mapUrl: string };
+  scenic: {
+    name: string;
+    intro: string;
+    mapUrl: string;
+    mapImage?: string; // base64 / URL，自定义底图
+    mapBounds?: { west: number; south: number; east: number; north: number }; // 图片对应的经纬度边界
+  };
 }
 
 const KEY = "xunmi_admin_db_v1";
