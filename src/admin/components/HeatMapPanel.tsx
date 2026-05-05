@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Layers, MapPin, Flame, Eye, EyeOff, Crosshair } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Layers, MapPin, Flame, Eye, EyeOff, Crosshair, Image as ImageIcon, Map as MapIcon } from "lucide-react";
+import { useDB } from "../store";
 
 // 高德地图 Key
 const AMAP_KEY = (import.meta.env.VITE_AMAP_KEY as string) || "8a89d20b7f2d4a90ca361d2f56a59186";
