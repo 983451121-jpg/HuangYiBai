@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Layers, MapPin, Flame, Eye, EyeOff, Crosshair,
-  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon,
+  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon, Route,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +19,19 @@ const SCENIC_BOUNDARY: [number, number][] = [
   [120.0905, 31.4365], [120.0850, 31.4380], [120.0815, 31.4425],
   [120.0820, 31.4500],
 ];
+
+// 主游览路线：景区南入口 → 五印坛城 → 九龙灌浴 → 阿育王柱 → 梵宫广场 → 祥符禅寺 → 灵山大佛
+const MAIN_ROUTE: [number, number][] = [
+  [120.0905, 31.4368], // 起点：南入口
+  [120.0915, 31.4395], // 五印坛城
+  [120.0895, 31.4418], // 九龙灌浴
+  [120.0888, 31.4440], // 阿育王柱
+  [120.0915, 31.4462], // 梵宫广场
+  [120.0878, 31.4478], // 祥符禅寺
+  [120.0855, 31.4500], // 终点：灵山大佛
+];
+const ROUTE_START = MAIN_ROUTE[0];
+const ROUTE_END = MAIN_ROUTE[MAIN_ROUTE.length - 1];
 
 interface LiveSpot {
   id: string;
@@ -95,10 +108,16 @@ export default function HeatMapPanel() {
   const polygonRef = useRef<any>(null);
   const satelliteRef = useRef<any>(null);
   const roadNetRef = useRef<any>(null);
+  const routeGlowRef = useRef<any>(null);
+  const routeMainRef = useRef<any>(null);
+  const routeDashRef = useRef<any>(null);
+  const routeStartRef = useRef<any>(null);
+  const routeEndRef = useRef<any>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [showRoute, setShowRoute] = useState(true);
   const [mapType, setMapType] = useState<"standard" | "satellite">("standard");
 
   const [spots, setSpots] = useState<LiveSpot[]>([]);
@@ -183,6 +202,100 @@ export default function HeatMapPanel() {
         });
         label.setMap(map);
 
+        // ===== 主游览路线（三层叠加：外发光 + 主线 + 流动虚线）=====
+        const routeGlow = new AMap.Polyline({
+          path: MAIN_ROUTE,
+          strokeColor: "#38bdf8",
+          strokeWeight: 14,
+          strokeOpacity: 0.25,
+          lineJoin: "round",
+          lineCap: "round",
+          zIndex: 90,
+        });
+        const routeMain = new AMap.Polyline({
+          path: MAIN_ROUTE,
+          strokeColor: "#2563eb",
+          strokeWeight: 6,
+          strokeOpacity: 0.95,
+          lineJoin: "round",
+          lineCap: "round",
+          zIndex: 100,
+          showDir: true,
+        });
+        const routeDash = new AMap.Polyline({
+          path: MAIN_ROUTE,
+          strokeColor: "#ffffff",
+          strokeWeight: 2.5,
+          strokeOpacity: 0.95,
+          strokeStyle: "dashed",
+          strokeDasharray: [10, 12],
+          lineJoin: "round",
+          lineCap: "round",
+          zIndex: 110,
+        });
+        routeGlow.setMap(map);
+        routeMain.setMap(map);
+        routeDash.setMap(map);
+        routeGlowRef.current = routeGlow;
+        routeMainRef.current = routeMain;
+        routeDashRef.current = routeDash;
+
+        // 流动虚线动画
+        let dashOffset = 0;
+        const dashTimer = setInterval(() => {
+          if (!routeDashRef.current) return;
+          dashOffset = (dashOffset + 1) % 22;
+          routeDashRef.current.setOptions({
+            strokeDasharray: [10, 12],
+            // 通过轻微改变 dasharray 模拟流动（高德 JSAPI 无 dashOffset，用相位错移近似）
+          });
+        }, 120);
+
+        const buildEndpointDom = (kind: "start" | "end") => {
+          const dom = document.createElement("div");
+          const isStart = kind === "start";
+          const bg = isStart ? "#10b981" : "#ef4444";
+          const text = isStart ? "起" : "终";
+          const sub = isStart ? "南入口" : "灵山大佛";
+          dom.innerHTML = `
+            <div style="position:relative;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;">
+              <div style="
+                width:34px;height:34px;border-radius:50%;
+                background:${bg};color:#fff;font-weight:700;font-size:15px;
+                display:flex;align-items:center;justify-content:center;
+                border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,0.35);
+                font-family:'ZCOOL XiaoWei',serif;letter-spacing:1px;
+              ">${text}</div>
+              <div style="
+                position:absolute;top:38px;left:50%;transform:translateX(-50%);
+                white-space:nowrap;font-size:11px;font-weight:600;color:#0f172a;
+                background:rgba(255,255,255,0.96);padding:2px 8px;border-radius:8px;
+                border:1px solid ${bg};box-shadow:0 2px 6px rgba(15,23,42,0.18);
+              ">${sub}</div>
+            </div>`;
+          return dom;
+        };
+
+        const startMarker = new AMap.Marker({
+          position: ROUTE_START,
+          content: buildEndpointDom("start"),
+          anchor: "bottom-center",
+          zIndex: 300,
+        });
+        const endMarker = new AMap.Marker({
+          position: ROUTE_END,
+          content: buildEndpointDom("end"),
+          anchor: "bottom-center",
+          zIndex: 300,
+        });
+        startMarker.setMap(map);
+        endMarker.setMap(map);
+        routeStartRef.current = startMarker;
+        routeEndRef.current = endMarker;
+
+        // 把动画 timer 挂到 map 上方便清理
+        (map as any).__dashTimer = dashTimer;
+
         AMap.plugin(["AMap.HeatMap"], () => {
           if (disposed) return;
           const heatmap = new AMap.HeatMap(map, {
@@ -205,15 +318,31 @@ export default function HeatMapPanel() {
     return () => {
       disposed = true;
       try {
-        markersRef.current.forEach((m) => m.setMap(null));
+        const m = mapRef.current;
+        if (m && (m as any).__dashTimer) clearInterval((m as any).__dashTimer);
+        markersRef.current.forEach((mk) => mk.setMap(null));
         polygonRef.current?.setMap?.(null);
-        mapRef.current?.destroy?.();
+        routeGlowRef.current?.setMap?.(null);
+        routeMainRef.current?.setMap?.(null);
+        routeDashRef.current?.setMap?.(null);
+        routeStartRef.current?.setMap?.(null);
+        routeEndRef.current?.setMap?.(null);
+        m?.destroy?.();
       } catch { /* noop */ }
       markersRef.current = [];
       mapRef.current = null;
       heatRef.current = null;
     };
   }, []);
+
+  // 路线图层显隐
+  useEffect(() => {
+    const layers = [routeGlowRef, routeMainRef, routeDashRef, routeStartRef, routeEndRef];
+    layers.forEach((r) => {
+      if (!r.current) return;
+      showRoute ? r.current.show?.() : r.current.hide?.();
+    });
+  }, [showRoute]);
 
   // === 数据变化时刷新热力 + 标记 ===
   useEffect(() => {
@@ -368,6 +497,13 @@ export default function HeatMapPanel() {
           >
             {showMarkers ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             {showMarkers ? "隐藏景点" : "显示景点"}
+          </button>
+          <button
+            onClick={() => setShowRoute((v) => !v)}
+            className={`liquid-glass text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform ${showRoute ? "text-sky-300 ring-1 ring-sky-400/40" : "text-foreground"}`}
+          >
+            <Route className="w-3.5 h-3.5" />
+            {showRoute ? "隐藏路线" : "显示路线"}
           </button>
           <button
             onClick={toggleMapType}
