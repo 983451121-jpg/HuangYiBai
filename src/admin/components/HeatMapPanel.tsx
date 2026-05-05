@@ -274,6 +274,23 @@ export default function HeatMapPanel() {
     mapRef.current?.setZoomAndCenter?.(15.4, CENTER, false, 600);
   };
 
+  const toggleMapType = () => {
+    const AMap = window.AMap;
+    const map = mapRef.current;
+    if (!AMap || !map) return;
+    const next = mapType === "standard" ? "satellite" : "standard";
+    if (next === "satellite") {
+      if (!satelliteRef.current) {
+        satelliteRef.current = new AMap.TileLayer.Satellite();
+        roadNetRef.current = new AMap.TileLayer.RoadNet();
+      }
+      map.add([satelliteRef.current, roadNetRef.current]);
+    } else {
+      if (satelliteRef.current) map.remove([satelliteRef.current, roadNetRef.current]);
+    }
+    setMapType(next);
+  };
+
   const triggerSimulate = async () => {
     setSimulating(true);
     try {
