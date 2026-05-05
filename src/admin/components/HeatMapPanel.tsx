@@ -390,6 +390,9 @@ export default function HeatMapPanel() {
 }
 
 // ============== 自定义底图 + Canvas 热力 + 等比映射 ==============
+// 关键思路：图片 / 热力 canvas / 标记 全部放进同一个"内层"，
+// 内层使用图片的自然像素作为坐标系，所有点位用经纬度→图片像素一次换算后定位；
+// 缩放和平移只作用在最外层 transform，整体一起变换 → 永远不会错位。
 interface Bounds { west: number; south: number; east: number; north: number; }
 
 function CustomMapView({
@@ -402,14 +405,12 @@ function CustomMapView({
   showMarkers: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });    // 图片自然像素尺寸
-  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });    // 容器尺寸
+  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
 
-  // 监听容器尺寸
   useEffect(() => {
     if (!wrapRef.current) return;
     const ro = new ResizeObserver((entries) => {
@@ -420,67 +421,52 @@ function CustomMapView({
     return () => ro.disconnect();
   }, []);
 
-  // 重置视图（图片以 contain 方式适配）
-  const resetView = () => setView({ scale: 1, tx: 0, ty: 0 });
-  useEffect(() => {
-    const h = () => resetView();
-    window.addEventListener("xunmi-custom-map-reset", h);
-    return () => window.removeEventListener("xunmi-custom-map-reset", h);
-  }, []);
-
-  // 计算图片在容器中的 contain 后的基础尺寸与偏移
-  const layout = useMemo(() => {
-    if (!imgSize.w || !boxSize.w) return { baseW: 0, baseH: 0, baseX: 0, baseY: 0 };
+  // 图片 contain 适配后的"基础尺寸"——内层(inner)的实际像素大小
+  const fit = useMemo(() => {
+    if (!imgSize.w || !boxSize.w) return { w: 0, h: 0, x: 0, y: 0 };
     const ratio = Math.min(boxSize.w / imgSize.w, boxSize.h / imgSize.h);
-    const baseW = imgSize.w * ratio;
-    const baseH = imgSize.h * ratio;
-    const baseX = (boxSize.w - baseW) / 2;
-    const baseY = (boxSize.h - baseH) / 2;
-    return { baseW, baseH, baseX, baseY };
+    const w = imgSize.w * ratio;
+    const h = imgSize.h * ratio;
+    return { w, h, x: (boxSize.w - w) / 2, y: (boxSize.h - h) / 2 };
   }, [imgSize, boxSize]);
 
-  // 经纬度 → 图片像素（在 base 尺寸下）
-  const llToBasePx = (lng: number, lat: number) => {
+  // 经纬度 → 内层(inner)像素，1:1 对应图片
+  const llToInner = (lng: number, lat: number) => {
     const { west, east, south, north } = bounds;
-    const x = ((lng - west) / (east - west)) * layout.baseW;
-    const y = (1 - (lat - south) / (north - south)) * layout.baseH;
-    return { x: layout.baseX + x, y: layout.baseY + y };
-  };
-
-  // 应用 view（缩放 + 平移）后实际像素
-  const project = (lng: number, lat: number) => {
-    const p = llToBasePx(lng, lat);
-    // 以容器中心为缩放中心
-    const cx = boxSize.w / 2, cy = boxSize.h / 2;
     return {
-      x: cx + (p.x - cx) * view.scale + view.tx,
-      y: cy + (p.y - cy) * view.scale + view.ty,
+      x: ((lng - west) / (east - west)) * fit.w,
+      y: (1 - (lat - south) / (north - south)) * fit.h,
     };
   };
 
-  // 绘制 canvas 热力
+  // 绘制热力 canvas —— 直接画在 inner 坐标系下（与图片同尺寸）
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !boxSize.w || !boxSize.h) return;
-    canvas.width = boxSize.w;
-    canvas.height = boxSize.h;
+    if (!canvas || !fit.w || !fit.h) return;
+    // 用 devicePixelRatio 让缩放后依然清晰
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(fit.w * dpr);
+    canvas.height = Math.round(fit.h * dpr);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!showHeat || !layout.baseW) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, fit.w, fit.h);
+    if (!showHeat) return;
 
     const maxCount = Math.max(...spots.map((s) => s.count), 1);
-    // 1) 累积灰度
     const gray = document.createElement("canvas");
     gray.width = canvas.width;
     gray.height = canvas.height;
     const gctx = gray.getContext("2d")!;
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 热力半径基于图片尺寸（不是屏幕），保证缩放时与底图等比
+    const baseRadius = Math.max(28, Math.min(fit.w, fit.h) * 0.06);
     spots.forEach((s) => {
-      const { x, y } = project(s.lng, s.lat);
+      const { x, y } = llToInner(s.lng, s.lat);
       const intensity = Math.min(1, s.count / maxCount);
-      const radius = 50 * view.scale * (0.7 + intensity * 0.6);
+      const radius = baseRadius * (0.7 + intensity * 0.7);
       const grd = gctx.createRadialGradient(x, y, 0, x, y, radius);
-      grd.addColorStop(0, `rgba(0,0,0,${0.55 * intensity})`);
+      grd.addColorStop(0, `rgba(0,0,0,${0.6 * intensity})`);
       grd.addColorStop(1, "rgba(0,0,0,0)");
       gctx.fillStyle = grd;
       gctx.beginPath();
@@ -488,7 +474,6 @@ function CustomMapView({
       gctx.fill();
     });
 
-    // 2) 灰度 → 渐变上色
     const data = gctx.getImageData(0, 0, canvas.width, canvas.height);
     const palette = buildPalette();
     for (let i = 0; i < data.data.length; i += 4) {
@@ -500,10 +485,11 @@ function CustomMapView({
       data.data[i + 2] = c[2];
       data.data[i + 3] = Math.min(220, a + 30);
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.putImageData(data, 0, 0);
-  }, [spots, showHeat, view, boxSize, layout, bounds]);
+  }, [spots, showHeat, fit, bounds]);
 
-  // 滚轮缩放（以鼠标为中心）
+  // 滚轮缩放（以鼠标为锚点）
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = -e.deltaY * 0.0015;
@@ -512,11 +498,10 @@ function CustomMapView({
     const rect = wrapRef.current!.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const cx = boxSize.w / 2, cy = boxSize.h / 2;
-    // 保持鼠标点在缩放后位置不变
     const k = newScale / view.scale;
-    const tx = mx - (mx - view.tx - cx) * k - cx + (k - 1) * 0; // 简化
-    const ty = my - (my - view.ty - cy) * k - cy;
+    // 让鼠标点在缩放前后保持在同一个内层坐标
+    const tx = mx - (mx - view.tx) * k;
+    const ty = my - (my - view.ty) * k;
     setView({ scale: newScale, tx, ty });
   };
 
@@ -532,23 +517,11 @@ function CustomMapView({
   };
   const onMouseUp = () => { dragRef.current = null; };
 
-  // 图片变换样式（与 project 一致）
-  const imgStyle: React.CSSProperties = {
-    position: "absolute",
-    left: layout.baseX,
-    top: layout.baseY,
-    width: layout.baseW,
-    height: layout.baseH,
-    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
-    transformOrigin: `${boxSize.w / 2 - layout.baseX}px ${boxSize.h / 2 - layout.baseY}px`,
-    userSelect: "none",
-    pointerEvents: "none",
-  };
-
+  // 内层：以图片左上为原点；外层 transform 一次性带着所有元素缩放/平移
   return (
     <div
       ref={wrapRef}
-      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      className="absolute inset-0 cursor-grab active:cursor-grabbing overflow-hidden"
       style={{ background: "radial-gradient(circle at 50% 50%, #0b1a2a, #050810)" }}
       onWheel={onWheel}
       onMouseDown={onMouseDown}
@@ -556,48 +529,93 @@ function CustomMapView({
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
+      {/* 用于探测图片尺寸（不显示） */}
       {image && (
         <img
-          ref={imgRef}
           src={image}
-          alt="map"
-          draggable={false}
-          style={imgStyle}
+          alt=""
+          style={{ position: "absolute", width: 0, height: 0, opacity: 0 }}
           onLoad={(e) => {
             const t = e.currentTarget;
             setImgSize({ w: t.naturalWidth, h: t.naturalHeight });
           }}
         />
       )}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 pointer-events-none"
-      />
-      {showMarkers && layout.baseW > 0 && spots.map((s) => {
-        const p = project(s.lng, s.lat);
-        const color = CATEGORY_COLOR[s.category];
-        const size = Math.min(36, 14 + s.count / 30) * Math.max(0.7, Math.min(1.4, view.scale));
-        return (
-          <div
-            key={s.id}
-            className="absolute pointer-events-none"
-            style={{ left: p.x, top: p.y, transform: "translate(-50%,-50%)" }}
-          >
-            <div style={{
-              width: size, height: size, borderRadius: "50%",
-              background: `radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%)`,
-              boxShadow: `0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4)`,
-              border: "1px solid rgba(255,255,255,0.5)",
-            }} />
-            <div style={{
-              position: "absolute", top: "100%", left: "50%", transform: "translate(-50%,4px)",
-              whiteSpace: "nowrap", fontSize: 10, color: "#fff",
-              background: "rgba(10,15,25,0.6)", padding: "2px 6px", borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.12)", letterSpacing: 1,
-            }}>{s.name} · {s.count}</div>
-          </div>
-        );
-      })}
+
+      {fit.w > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            left: fit.x,
+            top: fit.y,
+            width: fit.w,
+            height: fit.h,
+            transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+            transformOrigin: "0 0",
+            willChange: "transform",
+          }}
+        >
+          {image && (
+            <img
+              src={image}
+              alt="map"
+              draggable={false}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", userSelect: "none", pointerEvents: "none" }}
+            />
+          )}
+          <canvas
+            ref={canvasRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              mixBlendMode: "screen",
+              opacity: 0.85,
+            }}
+          />
+          {showMarkers && spots.map((s) => {
+            const p = llToInner(s.lng, s.lat);
+            const color = CATEGORY_COLOR[s.category];
+            const size = Math.min(36, 14 + s.count / 30);
+            // 反向缩放：保持标记在屏幕上视觉大小不随地图放大而变巨大
+            const inv = 1 / view.scale;
+            return (
+              <div
+                key={s.id}
+                style={{
+                  position: "absolute",
+                  left: p.x,
+                  top: p.y,
+                  transform: `translate(-50%,-50%) scale(${inv})`,
+                  transformOrigin: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{
+                  width: size, height: size, borderRadius: "50%",
+                  background: `radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%)`,
+                  boxShadow: `0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4)`,
+                  border: "1px solid rgba(255,255,255,0.5)",
+                }} />
+                <div style={{
+                  position: "absolute", top: "100%", left: "50%", transform: "translate(-50%,4px)",
+                  whiteSpace: "nowrap", fontSize: 10, color: "#fff",
+                  background: "rgba(10,15,25,0.6)", padding: "2px 6px", borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.12)", letterSpacing: 1,
+                }}>{s.name} · {s.count}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!image && (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+          请在「景区资料」中上传自定义底图
+        </div>
+      )}
 
       <div className="absolute left-3 top-3 liquid-glass rounded-xl px-2.5 py-1 text-[10px] text-foreground/80 tracking-widest pointer-events-none">
         缩放 {view.scale.toFixed(2)}× · 滚轮缩放 / 拖拽平移
