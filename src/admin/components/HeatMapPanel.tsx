@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Layers, MapPin, Flame, Eye, EyeOff, Crosshair,
-  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon,
+  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon, Route,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +19,19 @@ const SCENIC_BOUNDARY: [number, number][] = [
   [120.0905, 31.4365], [120.0850, 31.4380], [120.0815, 31.4425],
   [120.0820, 31.4500],
 ];
+
+// 主游览路线：景区南入口 → 五印坛城 → 九龙灌浴 → 阿育王柱 → 梵宫广场 → 祥符禅寺 → 灵山大佛
+const MAIN_ROUTE: [number, number][] = [
+  [120.0905, 31.4368], // 起点：南入口
+  [120.0915, 31.4395], // 五印坛城
+  [120.0895, 31.4418], // 九龙灌浴
+  [120.0888, 31.4440], // 阿育王柱
+  [120.0915, 31.4462], // 梵宫广场
+  [120.0878, 31.4478], // 祥符禅寺
+  [120.0855, 31.4500], // 终点：灵山大佛
+];
+const ROUTE_START = MAIN_ROUTE[0];
+const ROUTE_END = MAIN_ROUTE[MAIN_ROUTE.length - 1];
 
 interface LiveSpot {
   id: string;
