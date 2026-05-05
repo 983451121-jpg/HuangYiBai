@@ -231,28 +231,32 @@ export default function HeatMapPanel() {
 
     spots.forEach((s) => {
       const color = CATEGORY_COLOR[s.category] ?? CATEGORY_COLOR["其他"];
-      const size = Math.min(38, 14 + s.count / 25);
+      const isHot = s.count > 0;
+      // 高德同款红色水滴 pin（SVG），底部尖端对齐坐标点
+      const pinColor = isHot ? "#e11d48" : "#94a3b8";
       const dom = document.createElement("div");
       dom.innerHTML = `
-        <div style="position:relative;transform:translate(-50%,-50%);">
+        <div style="position:relative;transform:translate(-50%,-100%);">
+          <svg width="28" height="36" viewBox="0 0 28 36" style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));${isHot ? "animation: heat-ping 2.4s ease-out infinite;transform-origin:50% 100%;" : ""}">
+            <path d="M14 0C6.27 0 0 6.05 0 13.52 0 23.6 14 36 14 36s14-12.4 14-22.48C28 6.05 21.73 0 14 0z" fill="${pinColor}" stroke="#ffffff" stroke-width="1.5"/>
+            <circle cx="14" cy="13.5" r="5" fill="#ffffff"/>
+            <circle cx="14" cy="13.5" r="2.6" fill="${pinColor}"/>
+          </svg>
           <div style="
-            width:${size}px;height:${size}px;border-radius:50%;
-            background:radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%);
-            box-shadow:0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4);
-            border:1px solid rgba(255,255,255,0.5);
-            ${s.count > 0 ? "animation: heat-ping 2.4s ease-out infinite;" : ""}
-          "></div>
-          <div style="
-            position:absolute;top:100%;left:50%;transform:translate(-50%,4px);
-            white-space:nowrap;font-size:10px;color:#fff;
-            background:rgba(10,15,25,0.6);padding:2px 6px;border-radius:8px;
-            border:1px solid rgba(255,255,255,0.12);letter-spacing:1px;
-          ">${s.name} · ${s.count}</div>
+            position:absolute;top:0;left:50%;transform:translate(-50%,-110%);
+            white-space:nowrap;font-size:11px;color:#0f172a;font-weight:500;
+            background:rgba(255,255,255,0.95);padding:2px 8px;border-radius:10px;
+            border:1px solid rgba(15,23,42,0.08);box-shadow:0 2px 6px rgba(15,23,42,0.12);
+            letter-spacing:0.5px;
+          ">
+            <span style="color:${color};">●</span> ${s.name}
+            <span style="color:${pinColor};font-weight:600;margin-left:4px;">${s.count}</span>
+          </div>
         </div>`;
       const marker = new AMap.Marker({
         position: [s.lng, s.lat],
         content: dom,
-        anchor: "center",
+        anchor: "bottom-center",
         zIndex: 200,
       });
       marker.setMap(map);
