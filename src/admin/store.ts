@@ -79,7 +79,13 @@ const seed = (): DB => ({
   avatars: [
     { id: "av1", name: "阿觅", avatar: "🦊", language: "中文", dialect: "普通话", style: "温柔知性", intro: "寻觅景区官方 AI 导览，熟悉景区每一处秘境。", knowledge: "景区历史、典故、动植物、餐饮、住宿。" },
   ],
-  scenic: { name: "寻觅景区", intro: "国家 5A 级景区，融合自然山水与人文古迹。", mapUrl: "" },
+  scenic: {
+    name: "灵山胜境",
+    intro: "国家 5A 级景区，融合自然山水与人文古迹。",
+    mapUrl: "",
+    mapImage: "",
+    mapBounds: { west: 120.0815, south: 31.4365, east: 120.0985, north: 31.4520 },
+  },
 });
 
 function load(): DB {
