@@ -499,6 +499,13 @@ export default function HeatMapPanel() {
             {showMarkers ? "隐藏景点" : "显示景点"}
           </button>
           <button
+            onClick={() => setShowRoute((v) => !v)}
+            className={`liquid-glass text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform ${showRoute ? "text-sky-300 ring-1 ring-sky-400/40" : "text-foreground"}`}
+          >
+            <Route className="w-3.5 h-3.5" />
+            {showRoute ? "隐藏路线" : "显示路线"}
+          </button>
+          <button
             onClick={toggleMapType}
             className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
           >
