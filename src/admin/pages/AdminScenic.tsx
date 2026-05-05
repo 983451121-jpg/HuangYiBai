@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Trash2, MapPin, Package, Bot, Save } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, Trash2, MapPin, Package, Bot, Save, Upload, Image as ImageIcon, X } from "lucide-react";
 import { api, useDB, ScenicArea, Goods, ScenicAvatar } from "../store";
 import { showToast } from "../Toast";
 
