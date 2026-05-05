@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Layers, MapPin, Flame, Eye, EyeOff, Crosshair,
-  Wifi, WifiOff, Radio, Loader2,
+  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
