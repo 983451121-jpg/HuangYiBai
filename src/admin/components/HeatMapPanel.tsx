@@ -1,80 +1,50 @@
-import { useEffect, useRef, useState } from "react";
-import { Layers, MapPin, Flame, Eye, EyeOff, Crosshair } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  Layers, MapPin, Flame, Eye, EyeOff, Crosshair,
+  Wifi, WifiOff, Radio, Loader2,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-// 高德地图 Key
-const AMAP_KEY = (import.meta.env.VITE_AMAP_KEY as string) || "8a89d20b7f2d4a90ca361d2f56a59186";
-const AMAP_SECURITY_CODE = (import.meta.env.VITE_AMAP_SECURITY_CODE as string) || "";
+const AMAP_KEY =
+  (import.meta.env.VITE_AMAP_KEY as string) ||
+  "8a89d20b7f2d4a90ca361d2f56a59186";
+const AMAP_SECURITY_CODE =
+  (import.meta.env.VITE_AMAP_SECURITY_CODE as string) || "";
 
-// === 寻觅 · 灵山胜境景区 ===
-// 景区中心：无锡马山灵山胜境（梵宫前广场附近）
 const CENTER: [number, number] = [120.0894, 31.4445];
 
-// 景区边界（粗略范围 polygon），用于在地图上勾出景区轮廓
 const SCENIC_BOUNDARY: [number, number][] = [
-  [120.0820, 31.4500],
-  [120.0865, 31.4520],
-  [120.0935, 31.4515],
-  [120.0980, 31.4480],
-  [120.0985, 31.4430],
-  [120.0960, 31.4385],
-  [120.0905, 31.4365],
-  [120.0850, 31.4380],
-  [120.0815, 31.4425],
+  [120.0820, 31.4500], [120.0865, 31.4520], [120.0935, 31.4515],
+  [120.0980, 31.4480], [120.0985, 31.4430], [120.0960, 31.4385],
+  [120.0905, 31.4365], [120.0850, 31.4380], [120.0815, 31.4425],
   [120.0820, 31.4500],
 ];
 
-// === 灵山胜境核心景点（基于结构化数据集）===
-// 坐标为景区内相对位置（基于公开地图近似定位）
-interface Spot {
+interface LiveSpot {
   id: string;
   name: string;
   lng: number;
   lat: number;
-  count: number;        // 当前在区域内人数
-  category: "佛教朝圣" | "自然景观" | "禅意体验" | "演艺" | "服务";
+  zone: string;
+  category: string;
+  capacity: number;
+  count: number;
+  last_seen: string | null;
 }
 
-const SPOTS: Spot[] = [
-  // 灵山胜境核心区
-  { id: "LS-001", name: "灵山大照壁",   lng: 120.0905, lat: 31.4480, count: 280, category: "佛教朝圣" },
-  { id: "LS-002", name: "五明桥",       lng: 120.0908, lat: 31.4470, count: 195, category: "佛教朝圣" },
-  { id: "LS-003", name: "胜境门楼",     lng: 120.0910, lat: 31.4462, count: 230, category: "佛教朝圣" },
-  { id: "LS-004", name: "洗心池",       lng: 120.0912, lat: 31.4455, count: 140, category: "禅意体验" },
-  { id: "LS-005", name: "五智门",       lng: 120.0914, lat: 31.4448, count: 175, category: "佛教朝圣" },
-  { id: "LS-006", name: "九龙灌浴",     lng: 120.0918, lat: 31.4440, count: 520, category: "演艺" },
-  { id: "LS-007", name: "降魔成道",     lng: 120.0922, lat: 31.4432, count: 165, category: "演艺" },
-  { id: "LS-008", name: "阿育王柱",     lng: 120.0925, lat: 31.4425, count: 120, category: "佛教朝圣" },
-  { id: "LS-009", name: "祥符禅寺",     lng: 120.0930, lat: 31.4418, count: 410, category: "佛教朝圣" },
-  { id: "LS-010", name: "灵山大佛",     lng: 120.0938, lat: 31.4408, count: 680, category: "佛教朝圣" },
-  { id: "LS-011", name: "百子戏弥勒",   lng: 120.0928, lat: 31.4413, count: 245, category: "佛教朝圣" },
-  { id: "LS-012", name: "万佛殿",       lng: 120.0942, lat: 31.4402, count: 320, category: "佛教朝圣" },
-  { id: "LS-013", name: "梵宫",         lng: 120.0895, lat: 31.4435, count: 595, category: "演艺" },
-  { id: "LS-014", name: "五印坛城",     lng: 120.0875, lat: 31.4448, count: 285, category: "佛教朝圣" },
-  { id: "LS-015", name: "曼飞龙塔",     lng: 120.0868, lat: 31.4452, count: 110, category: "自然景观" },
-  { id: "LS-016", name: "无尽意斋",     lng: 120.0915, lat: 31.4395, count: 75,  category: "禅意体验" },
-
-  // 拈花湾禅意小镇
-  { id: "NHW-01", name: "拈花湾入口",   lng: 120.0838, lat: 31.4470, count: 360, category: "服务" },
-  { id: "NHW-02", name: "香月花街",     lng: 120.0830, lat: 31.4460, count: 470, category: "禅意体验" },
-  { id: "NHW-03", name: "拈花塔",       lng: 120.0822, lat: 31.4452, count: 380, category: "演艺" },
-  { id: "NHW-04", name: "五灯湖",       lng: 120.0828, lat: 31.4445, count: 290, category: "自然景观" },
-  { id: "NHW-05", name: "鹿鸣谷",       lng: 120.0840, lat: 31.4438, count: 155, category: "自然景观" },
-  { id: "NHW-06", name: "波罗蜜广场",   lng: 120.0832, lat: 31.4475, count: 215, category: "禅意体验" },
-];
-
-// 在每个景点周围生成扰动点，让热力图过渡更自然
-function expandHeat(spots: Spot[]) {
+function expandHeat(spots: LiveSpot[]) {
   const data: { lng: number; lat: number; count: number }[] = [];
   for (const s of spots) {
+    if (s.count <= 0) continue;
     data.push({ lng: s.lng, lat: s.lat, count: s.count });
     const ring = Math.max(3, Math.round(s.count / 80));
     for (let i = 0; i < ring; i++) {
       const a = (Math.PI * 2 * i) / ring;
-      const r = 0.0008 + Math.random() * 0.0010;
+      const r = 0.0008 + (i % 3) * 0.0003;
       data.push({
         lng: s.lng + Math.cos(a) * r,
         lat: s.lat + Math.sin(a) * r,
-        count: Math.round(s.count * (0.35 + Math.random() * 0.35)),
+        count: Math.round(s.count * (0.35 + ((i * 17) % 35) / 100)),
       });
     }
   }
@@ -92,13 +62,12 @@ let amapLoadPromise: Promise<any> | null = null;
 function loadAMap(): Promise<any> {
   if (window.AMap) return Promise.resolve(window.AMap);
   if (amapLoadPromise) return amapLoadPromise;
-
   amapLoadPromise = new Promise((resolve, reject) => {
     if (AMAP_SECURITY_CODE) {
       window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
     }
     const s = document.createElement("script");
-    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale,AMap.ToolBar`;
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale`;
     s.async = true;
     s.onload = () => resolve(window.AMap);
     s.onerror = () => reject(new Error("AMap script load failed"));
@@ -107,13 +76,16 @@ function loadAMap(): Promise<any> {
   return amapLoadPromise;
 }
 
-const CATEGORY_COLOR: Record<Spot["category"], string> = {
+const CATEGORY_COLOR: Record<string, string> = {
   佛教朝圣: "#f59e0b",
   自然景观: "#34d399",
   禅意体验: "#60a5fa",
   演艺:     "#f472b6",
   服务:     "#a78bfa",
+  其他:     "#9ca3af",
 };
+
+const POLL_INTERVAL_MS = 5_000;
 
 export default function HeatMapPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -125,41 +97,52 @@ export default function HeatMapPanel() {
   const [error, setError] = useState<string | null>(null);
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
-  const [spots, setSpots] = useState<Spot[]>(SPOTS);
 
-  // 实时人流轻微波动
-  useEffect(() => {
-    const t = setInterval(() => {
-      setSpots((prev) =>
-        prev.map((s) => ({
-          ...s,
-          count: Math.max(20, s.count + Math.floor(Math.random() * 30) - 15),
-        }))
-      );
-    }, 3500);
-    return () => clearInterval(t);
+  const [spots, setSpots] = useState<LiveSpot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastFetchAt, setLastFetchAt] = useState<number | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [simulating, setSimulating] = useState(false);
+
+  // === 拉取实时人流 ===
+  const fetchLive = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("spot_traffic_live")
+      .select("*")
+      .order("count", { ascending: false });
+    if (error) {
+      setFetchError(error.message);
+      return;
+    }
+    setFetchError(null);
+    setLastFetchAt(Date.now());
+    setSpots((data ?? []) as LiveSpot[]);
+    setLoading(false);
   }, []);
 
-  // 初始化地图
+  // 5秒轮询
+  useEffect(() => {
+    fetchLive();
+    const t = setInterval(fetchLive, POLL_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [fetchLive]);
+
+  // === 初始化地图 ===
   useEffect(() => {
     let disposed = false;
     loadAMap()
       .then((AMap) => {
         if (disposed || !containerRef.current) return;
-
         const map = new AMap.Map(containerRef.current, {
           zoom: 15.4,
           center: CENTER,
           mapStyle: "amap://styles/dark",
           viewMode: "2D",
           features: ["bg", "road", "building", "point"],
-          pitch: 0,
         });
         mapRef.current = map;
-
         map.addControl(new AMap.Scale({ position: "LB" }));
 
-        // 景区边界 polygon（玻璃质感描边）
         const polygon = new AMap.Polygon({
           path: SCENIC_BOUNDARY,
           strokeColor: "#7dd3fc",
@@ -173,7 +156,6 @@ export default function HeatMapPanel() {
         polygon.setMap(map);
         polygonRef.current = polygon;
 
-        // 中心标签
         const label = new AMap.Text({
           text: "灵山胜境 · 寻觅",
           position: CENTER,
@@ -204,10 +186,6 @@ export default function HeatMapPanel() {
               1.0: "rgba(255,60,90,1)",
             },
           });
-          heatmap.setDataSet({
-            data: expandHeat(SPOTS),
-            max: 700,
-          });
           heatRef.current = heatmap;
         });
       })
@@ -219,33 +197,31 @@ export default function HeatMapPanel() {
         markersRef.current.forEach((m) => m.setMap(null));
         polygonRef.current?.setMap?.(null);
         mapRef.current?.destroy?.();
-      } catch {}
+      } catch { /* noop */ }
       markersRef.current = [];
       mapRef.current = null;
       heatRef.current = null;
     };
   }, []);
 
-  // 标记点 + 实时刷新热力数据
+  // === 数据变化时刷新热力 + 标记 ===
   useEffect(() => {
     const AMap = window.AMap;
     const map = mapRef.current;
-    if (!AMap || !map) return;
+    if (!AMap || !map || spots.length === 0) return;
 
-    // 刷新热力
     if (heatRef.current) {
-      heatRef.current.setDataSet({ data: expandHeat(spots), max: 700 });
+      const max = Math.max(50, ...spots.map((s) => s.count));
+      heatRef.current.setDataSet({ data: expandHeat(spots), max });
     }
 
-    // 重建标记
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-
     if (!showMarkers) return;
 
     spots.forEach((s) => {
-      const color = CATEGORY_COLOR[s.category];
-      const size = Math.min(36, 14 + s.count / 30);
+      const color = CATEGORY_COLOR[s.category] ?? CATEGORY_COLOR["其他"];
+      const size = Math.min(38, 14 + s.count / 25);
       const dom = document.createElement("div");
       dom.innerHTML = `
         <div style="position:relative;transform:translate(-50%,-50%);">
@@ -254,8 +230,7 @@ export default function HeatMapPanel() {
             background:radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%);
             box-shadow:0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4);
             border:1px solid rgba(255,255,255,0.5);
-            display:flex;align-items:center;justify-content:center;
-            backdrop-filter:blur(2px);
+            ${s.count > 0 ? "animation: heat-ping 2.4s ease-out infinite;" : ""}
           "></div>
           <div style="
             position:absolute;top:100%;left:50%;transform:translate(-50%,4px);
@@ -277,8 +252,7 @@ export default function HeatMapPanel() {
 
   const toggleHeat = () => {
     if (!heatRef.current) return;
-    if (showHeat) heatRef.current.hide();
-    else heatRef.current.show();
+    showHeat ? heatRef.current.hide() : heatRef.current.show();
     setShowHeat(!showHeat);
   };
 
@@ -286,26 +260,69 @@ export default function HeatMapPanel() {
     mapRef.current?.setZoomAndCenter?.(15.4, CENTER, false, 600);
   };
 
-  // 排序后的 Top 5 热点
+  const triggerSimulate = async () => {
+    setSimulating(true);
+    try {
+      const { error } = await supabase.functions.invoke("ble-simulate", {
+        body: { devices: 12 },
+      });
+      if (error) throw error;
+      await fetchLive();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "模拟失败";
+      setFetchError(msg);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
   const top5 = [...spots].sort((a, b) => b.count - a.count).slice(0, 5);
   const total = spots.reduce((s, x) => s + x.count, 0);
   const peak = top5[0];
+  const isLive = lastFetchAt !== null && Date.now() - lastFetchAt < 12_000 && !fetchError;
 
   return (
     <div className="liquid-glass rounded-3xl p-6">
+      <style>{`
+        @keyframes heat-ping {
+          0%   { transform: scale(0.95); opacity: 0.95; }
+          70%  { transform: scale(1.12); opacity: 0.55; }
+          100% { transform: scale(0.95); opacity: 0.95; }
+        }
+      `}</style>
+
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <div
-            className="text-foreground text-lg"
+            className="text-foreground text-lg flex items-center gap-2"
             style={{ fontFamily: "'ZCOOL XiaoWei', serif", letterSpacing: "0.15em" }}
           >
             灵山胜境 · 实时热力图
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${
+                isLive
+                  ? "border-emerald-400/40 text-emerald-300 bg-emerald-400/10"
+                  : "border-rose-400/40 text-rose-300 bg-rose-400/10"
+              }`}
+              title={fetchError ?? ""}
+            >
+              {isLive ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
+              {isLive ? "LIVE" : fetchError ? "ERR" : "—"}
+            </span>
           </div>
           <div className="text-muted-foreground text-xs mt-1">
-            高德地图 · 景区景点级人流热力 · 玻璃叠加层
+            BLE 信标 60s 滑动窗口聚合 · 每 5 秒轮询后端
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={triggerSimulate}
+            disabled={simulating}
+            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform disabled:opacity-50"
+          >
+            {simulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Radio className="w-3.5 h-3.5" />}
+            注入信标流量
+          </button>
           <button
             onClick={toggleHeat}
             className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
@@ -330,7 +347,6 @@ export default function HeatMapPanel() {
         </div>
       </div>
 
-      {/* 图例 */}
       <div className="flex items-center gap-4 mb-3 text-[11px] text-muted-foreground flex-wrap">
         <div className="flex items-center gap-2">
           <span>低</span>
@@ -338,7 +354,7 @@ export default function HeatMapPanel() {
           <span>高</span>
         </div>
         <div className="h-3 w-px bg-white/10" />
-        {Object.entries(CATEGORY_COLOR).map(([k, v]) => (
+        {Object.entries(CATEGORY_COLOR).filter(([k]) => k !== "其他").map(([k, v]) => (
           <div key={k} className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: v, boxShadow: `0 0 8px ${v}` }} />
             <span>{k}</span>
@@ -346,19 +362,19 @@ export default function HeatMapPanel() {
         ))}
       </div>
 
-      {/* 地图容器 */}
       <div className="relative rounded-2xl overflow-hidden border border-white/10" style={{ height: 440 }}>
         <div ref={containerRef} className="absolute inset-0" />
 
-        {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 bg-black/30">
-            <MapPin className="w-8 h-8 text-muted-foreground mb-3" />
-            <div className="text-foreground text-sm mb-1">高德地图未就绪</div>
-            <div className="text-muted-foreground text-xs max-w-md leading-relaxed">{error}</div>
+        {(error || fetchError) && (
+          <div className="absolute left-3 top-3 max-w-xs liquid-glass rounded-xl px-3 py-2 text-[11px] text-rose-200 border border-rose-400/30">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <MapPin className="w-3 h-3" />
+              {error ? "地图错误" : "数据错误"}
+            </div>
+            <div className="text-muted-foreground">{error ?? fetchError}</div>
           </div>
         )}
 
-        {/* 顶部柔光 */}
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -366,29 +382,28 @@ export default function HeatMapPanel() {
               "linear-gradient(180deg, rgba(7,40,60,0.35) 0%, rgba(7,40,60,0) 22%, rgba(7,40,60,0) 78%, rgba(7,40,60,0.5) 100%)",
           }}
         />
-        {/* 玻璃边框 */}
         <div className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.06)]" />
 
-        {/* 实时统计 浮窗 */}
         <div className="absolute right-3 top-3 liquid-glass rounded-2xl px-4 py-3 min-w-[180px]">
           <div className="text-[10px] text-muted-foreground tracking-[0.25em]">REAL-TIME</div>
           <div className="mt-1 text-foreground text-2xl" style={{ fontFamily: "'Instrument Serif', serif" }}>
-            {total.toLocaleString()}
+            {loading ? "—" : total.toLocaleString()}
             <span className="text-xs text-muted-foreground ml-1">人在景区</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-[11px] text-rose-300">
             <Flame className="w-3 h-3" />
-            峰值：{peak?.name} · {peak?.count}
+            {peak ? `峰值：${peak.name} · ${peak.count}` : "暂无人流"}
+          </div>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            {lastFetchAt ? `更新 ${Math.max(0, Math.round((Date.now() - lastFetchAt) / 1000))}s 前` : "等待数据…"}
           </div>
         </div>
 
-        {/* 角落水印 */}
         <div className="absolute left-3 bottom-3 liquid-glass rounded-xl px-3 py-1.5 text-[11px] text-foreground/90 tracking-wider">
-          XUNMI · 灵山胜境 LIVE
+          XUNMI · BLE LIVE FEED
         </div>
       </div>
 
-      {/* Top 5 热点榜 */}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-5 gap-2">
         {top5.map((s, i) => (
           <div
@@ -398,7 +413,9 @@ export default function HeatMapPanel() {
             <div
               className="absolute inset-0 opacity-30 pointer-events-none"
               style={{
-                background: `radial-gradient(circle at 0% 0%, ${CATEGORY_COLOR[s.category]}, transparent 60%)`,
+                background: `radial-gradient(circle at 0% 0%, ${
+                  CATEGORY_COLOR[s.category] ?? CATEGORY_COLOR["其他"]
+                }, transparent 60%)`,
               }}
             />
             <div className="text-[10px] text-muted-foreground tracking-widest">TOP {i + 1}</div>
@@ -409,6 +426,11 @@ export default function HeatMapPanel() {
             </div>
           </div>
         ))}
+        {top5.length === 0 && (
+          <div className="md:col-span-5 rounded-2xl bg-white/5 border border-white/10 p-6 text-center text-sm text-muted-foreground">
+            暂无 BLE 上报数据 · 点击「注入信标流量」生成一批测试数据，或调用 <code className="text-foreground">/ble-ingest</code> 接口接入真实信标网关。
+          </div>
+        )}
       </div>
     </div>
   );
