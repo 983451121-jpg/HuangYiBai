@@ -67,7 +67,7 @@ function loadAMap(): Promise<any> {
       window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
     }
     const s = document.createElement("script");
-    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale`;
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale,AMap.TileLayer.Satellite,AMap.TileLayer.RoadNet`;
     s.async = true;
     s.onload = () => resolve(window.AMap);
     s.onerror = () => reject(new Error("AMap script load failed"));
