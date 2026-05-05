@@ -369,6 +369,13 @@ export default function HeatMapPanel() {
             {showMarkers ? "隐藏景点" : "显示景点"}
           </button>
           <button
+            onClick={toggleMapType}
+            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
+          >
+            {mapType === "standard" ? <Globe className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
+            {mapType === "standard" ? "卫星图" : "标准图"}
+          </button>
+          <button
             onClick={recenter}
             className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
           >
