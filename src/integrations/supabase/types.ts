@@ -14,13 +14,100 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ble_pings: {
+        Row: {
+          device_id: string
+          id: number
+          recorded_at: string
+          rssi: number | null
+          spot_id: string
+        }
+        Insert: {
+          device_id: string
+          id?: number
+          recorded_at?: string
+          rssi?: number | null
+          spot_id: string
+        }
+        Update: {
+          device_id?: string
+          id?: number
+          recorded_at?: string
+          rssi?: number | null
+          spot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ble_pings_spot_id_fkey"
+            columns: ["spot_id"]
+            isOneToOne: false
+            referencedRelation: "spot_traffic_live"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ble_pings_spot_id_fkey"
+            columns: ["spot_id"]
+            isOneToOne: false
+            referencedRelation: "spots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spots: {
+        Row: {
+          capacity: number
+          category: string
+          created_at: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          zone: string
+        }
+        Insert: {
+          capacity?: number
+          category?: string
+          created_at?: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          zone?: string
+        }
+        Update: {
+          capacity?: number
+          category?: string
+          created_at?: string
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          zone?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      spot_traffic_live: {
+        Row: {
+          capacity: number | null
+          category: string | null
+          count: number | null
+          id: string | null
+          last_seen: string | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          zone: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      record_ping: {
+        Args: { _device_id: string; _rssi?: number; _spot_id: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
