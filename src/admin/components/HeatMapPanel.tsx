@@ -99,7 +99,7 @@ export default function HeatMapPanel() {
   const [error, setError] = useState<string | null>(null);
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
-  const [mapType, setMapType] = useState<"standard" | "satellite">("standard");
+  const [mapType, setMapType] = useState<"standard" | "satellite">("satellite");
 
   const [spots, setSpots] = useState<LiveSpot[]>([]);
   const [loading, setLoading] = useState(true);
