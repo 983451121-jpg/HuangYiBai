@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Layers, MapPin, Flame, Eye, EyeOff, Crosshair,
-  Wifi, WifiOff, Radio, Loader2,
+  Wifi, WifiOff, Radio, Loader2, Globe, Map as MapIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,7 +67,7 @@ function loadAMap(): Promise<any> {
       window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
     }
     const s = document.createElement("script");
-    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale`;
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.HeatMap,AMap.Scale,AMap.TileLayer.Satellite,AMap.TileLayer.RoadNet`;
     s.async = true;
     s.onload = () => resolve(window.AMap);
     s.onerror = () => reject(new Error("AMap script load failed"));
@@ -93,10 +93,13 @@ export default function HeatMapPanel() {
   const heatRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polygonRef = useRef<any>(null);
+  const satelliteRef = useRef<any>(null);
+  const roadNetRef = useRef<any>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [showHeat, setShowHeat] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [mapType, setMapType] = useState<"standard" | "satellite">("standard");
 
   const [spots, setSpots] = useState<LiveSpot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,28 +231,32 @@ export default function HeatMapPanel() {
 
     spots.forEach((s) => {
       const color = CATEGORY_COLOR[s.category] ?? CATEGORY_COLOR["其他"];
-      const size = Math.min(38, 14 + s.count / 25);
+      const isHot = s.count > 0;
+      // 高德同款红色水滴 pin（SVG），底部尖端对齐坐标点
+      const pinColor = isHot ? "#e11d48" : "#94a3b8";
       const dom = document.createElement("div");
       dom.innerHTML = `
-        <div style="position:relative;transform:translate(-50%,-50%);">
+        <div style="position:relative;transform:translate(-50%,-100%);">
+          <svg width="28" height="36" viewBox="0 0 28 36" style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));${isHot ? "animation: heat-ping 2.4s ease-out infinite;transform-origin:50% 100%;" : ""}">
+            <path d="M14 0C6.27 0 0 6.05 0 13.52 0 23.6 14 36 14 36s14-12.4 14-22.48C28 6.05 21.73 0 14 0z" fill="${pinColor}" stroke="#ffffff" stroke-width="1.5"/>
+            <circle cx="14" cy="13.5" r="5" fill="#ffffff"/>
+            <circle cx="14" cy="13.5" r="2.6" fill="${pinColor}"/>
+          </svg>
           <div style="
-            width:${size}px;height:${size}px;border-radius:50%;
-            background:radial-gradient(circle at 30% 30%, ${color}cc, ${color}55 70%, transparent 75%);
-            box-shadow:0 0 14px ${color}99, inset 0 0 6px rgba(255,255,255,0.4);
-            border:1px solid rgba(255,255,255,0.5);
-            ${s.count > 0 ? "animation: heat-ping 2.4s ease-out infinite;" : ""}
-          "></div>
-          <div style="
-            position:absolute;top:100%;left:50%;transform:translate(-50%,4px);
-            white-space:nowrap;font-size:10px;color:#fff;
-            background:rgba(10,15,25,0.6);padding:2px 6px;border-radius:8px;
-            border:1px solid rgba(255,255,255,0.12);letter-spacing:1px;
-          ">${s.name} · ${s.count}</div>
+            position:absolute;top:0;left:50%;transform:translate(-50%,-110%);
+            white-space:nowrap;font-size:11px;color:#0f172a;font-weight:500;
+            background:rgba(255,255,255,0.95);padding:2px 8px;border-radius:10px;
+            border:1px solid rgba(15,23,42,0.08);box-shadow:0 2px 6px rgba(15,23,42,0.12);
+            letter-spacing:0.5px;
+          ">
+            <span style="color:${color};">●</span> ${s.name}
+            <span style="color:${pinColor};font-weight:600;margin-left:4px;">${s.count}</span>
+          </div>
         </div>`;
       const marker = new AMap.Marker({
         position: [s.lng, s.lat],
         content: dom,
-        anchor: "center",
+        anchor: "bottom-center",
         zIndex: 200,
       });
       marker.setMap(map);
@@ -265,6 +272,23 @@ export default function HeatMapPanel() {
 
   const recenter = () => {
     mapRef.current?.setZoomAndCenter?.(15.4, CENTER, false, 600);
+  };
+
+  const toggleMapType = () => {
+    const AMap = window.AMap;
+    const map = mapRef.current;
+    if (!AMap || !map) return;
+    const next = mapType === "standard" ? "satellite" : "standard";
+    if (next === "satellite") {
+      if (!satelliteRef.current) {
+        satelliteRef.current = new AMap.TileLayer.Satellite();
+        roadNetRef.current = new AMap.TileLayer.RoadNet();
+      }
+      map.add([satelliteRef.current, roadNetRef.current]);
+    } else {
+      if (satelliteRef.current) map.remove([satelliteRef.current, roadNetRef.current]);
+    }
+    setMapType(next);
   };
 
   const triggerSimulate = async () => {
@@ -343,6 +367,13 @@ export default function HeatMapPanel() {
           >
             {showMarkers ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             {showMarkers ? "隐藏景点" : "显示景点"}
+          </button>
+          <button
+            onClick={toggleMapType}
+            className="liquid-glass text-xs px-3 py-1.5 rounded-full text-foreground inline-flex items-center gap-1.5 hover:scale-[1.03] transition-transform"
+          >
+            {mapType === "standard" ? <Globe className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
+            {mapType === "standard" ? "卫星图" : "标准图"}
           </button>
           <button
             onClick={recenter}
