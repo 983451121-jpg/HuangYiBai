@@ -34,7 +34,7 @@ interface Spot {
   category: "佛教朝圣" | "自然景观" | "禅意体验" | "演艺" | "服务";
 }
 
-const SPOTS: Spot[] = [
+export const SPOTS: Spot[] = [
   // 灵山胜境核心区
   { id: "LS-001", name: "灵山大照壁",   lng: 120.0905, lat: 31.4480, count: 280, category: "佛教朝圣" },
   { id: "LS-002", name: "五明桥",       lng: 120.0908, lat: 31.4470, count: 195, category: "佛教朝圣" },
