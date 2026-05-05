@@ -167,14 +167,14 @@ export default function HeatMapPanel() {
           position: CENTER,
           offset: new AMap.Pixel(0, -8),
           style: {
-            background: "rgba(10,20,30,0.55)",
-            border: "1px solid rgba(255,255,255,0.18)",
-            color: "#fff",
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(37,99,235,0.35)",
+            color: "#1e3a8a",
             padding: "4px 10px",
             borderRadius: "999px",
             fontSize: "11px",
             letterSpacing: "2px",
-            backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 8px rgba(15,23,42,0.12)",
           },
         });
         label.setMap(map);
@@ -182,14 +182,15 @@ export default function HeatMapPanel() {
         AMap.plugin(["AMap.HeatMap"], () => {
           if (disposed) return;
           const heatmap = new AMap.HeatMap(map, {
-            radius: 55,
-            opacity: [0, 0.85],
+            radius: 50,
+            // 降低整体不透明度，保证下方地图（道路、建筑、POI）看得清楚
+            opacity: [0, 0.65],
             gradient: {
-              0.2: "rgba(80,200,180,0.55)",
-              0.4: "rgba(140,220,120,0.7)",
-              0.6: "rgba(255,210,90,0.85)",
-              0.8: "rgba(255,130,80,0.92)",
-              1.0: "rgba(255,60,90,1)",
+              0.2: "rgba(56,189,248,0.45)",
+              0.4: "rgba(132,204,22,0.6)",
+              0.6: "rgba(250,204,21,0.75)",
+              0.8: "rgba(249,115,22,0.85)",
+              1.0: "rgba(220,38,38,0.95)",
             },
           });
           heatRef.current = heatmap;
