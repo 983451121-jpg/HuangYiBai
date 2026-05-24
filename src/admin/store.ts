@@ -77,7 +77,7 @@ const seed = (): DB => ({
     { id: "g2", name: "云海明信片套装", price: 29, stock: 230 },
   ],
   avatars: [
-    { id: "av1", name: "阿觅", avatar: "🦊", language: "中文", dialect: "普通话", style: "温柔知性", intro: "寻觅景区官方 AI 导览，熟悉景区每一处秘境。", knowledge: "景区历史、典故、动植物、餐饮、住宿。" },
+    { id: "av1", name: "小觅", avatar: "🦊", language: "中文", dialect: "普通话", style: "温柔知性", intro: "寻觅景区官方 AI 导览，熟悉景区每一处秘境。", knowledge: "景区历史、典故、动植物、餐饮、住宿。" },
   ],
   scenic: {
     name: "灵山胜境",
